@@ -8,6 +8,10 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    env:
+      UPRN: ${{ secrets.UPRN }}
+      POSTCODE: ${{ secrets.POSTCODE }}
+      HOUSE_NUMBER_OR_NAME: ${{ secrets.HOUSE_NUMBER_OR_NAME }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -19,8 +23,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4
       - name: Run scraper
-        env:
-          UPRN: ${{ secrets.UPRN }}
-          POSTCODE: ${{ secrets.POSTCODE }}
-          HOUSE_NUMBER_OR_NAME: ${{ secrets.HOUSE_NUMBER_OR_NAME }}
         run: python cornwall_collection.py
