@@ -1,0 +1,26 @@
+name: Run Cornwall scraper
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+      - name: Run scraper
+        env:
+          UPRN: ${{ secrets.UPRN }}
+          POSTCODE: ${{ secrets.POSTCODE }}
+          HOUSE_NUMBER_OR_NAME: ${{ secrets.HOUSE_NUMBER_OR_NAME }}
+        run: python cornwall_collection.py
