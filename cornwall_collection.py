@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 import requests
 from bs4 import BeautifulSoup
@@ -19,6 +19,14 @@ ICON_MAP = {
     "Rubbish": "mdi:delete",
     "Recycling": "mdi:recycle",
     "Garden": "mdi:flower",
+}
+
+# Map the council's shorthand names to user facing summaries
+NAME_MAP = {
+    "Food": "Food Waste Collection",
+    "Recycling": "Recycling Collection",
+    "Rubbish": "Rubbish Recycling",
+    "Garden": "Garden Waste Collection",
 }
 
 
@@ -88,15 +96,42 @@ class Source:
                 continue
             collection = spans[0].text
             d = spans[-1].text + " " + str(date.today().year)
+            name = NAME_MAP.get(collection, collection)
             entries.append(
                 Collection(
                     datetime.strptime(d, "%d %b %Y").date(),
-                    collection,
+                    name,
                     icon=ICON_MAP.get(collection),
                 )
             )
 
         return entries
+
+
+def _build_ics(collections: list[Collection]) -> str:
+    """Create an iCalendar file for the provided collections."""
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        f"PRODID:-//{TITLE}//Waste Collection//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    dtstamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    for c in collections:
+        lines.extend(
+            [
+                "BEGIN:VEVENT",
+                f"UID:{c.date:%Y%m%d}-{c.type.replace(' ', '')}@{URL}",
+                f"SUMMARY:{c.type}",
+                f"DTSTAMP:{dtstamp}",
+                f"DTSTART;VALUE=DATE:{c.date:%Y%m%d}",
+                f"DTEND;VALUE=DATE:{(c.date + timedelta(days=1)):%Y%m%d}",
+                "END:VEVENT",
+            ]
+        )
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines) + "\r\n"
 
 
 def main() -> None:
@@ -113,6 +148,11 @@ def main() -> None:
 
     for c in collections:
         print(f"{c.date:%Y-%m-%d} - {c.type}")
+
+    ics = _build_ics(collections)
+    with open("cornwall_collection.ics", "w", encoding="utf-8") as f:
+        f.write(ics)
+    print("iCalendar file written to cornwall_collection.ics")
 
 
 if __name__ == "__main__":
