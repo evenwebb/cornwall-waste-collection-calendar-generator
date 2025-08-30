@@ -30,4 +30,6 @@ A sample environment file is provided as `.env.example`.
    python cornwall_collection.py
    ```
 
-The script will print upcoming collection dates and their types.
+The script will print upcoming collection dates and their types and also
+generate an `cornwall_collection.ics` file that can be imported into any
+calendar application supporting the iCalendar format.
