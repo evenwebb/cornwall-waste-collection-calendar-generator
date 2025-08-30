@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
@@ -99,6 +99,30 @@ class Source:
         return entries
 
 
+def _build_ics(collections: list[Collection]) -> str:
+    """Create an iCalendar file for the provided collections."""
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        f"PRODID:-//{TITLE}//Waste Collection//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+    ]
+    for c in collections:
+        lines.extend(
+            [
+                "BEGIN:VEVENT",
+                f"UID:{c.date:%Y%m%d}-{c.type.replace(' ', '')}@{URL}",
+                f"SUMMARY:{c.type} collection",
+                f"DTSTART;VALUE=DATE:{c.date:%Y%m%d}",
+                f"DTEND;VALUE=DATE:{(c.date + timedelta(days=1)):%Y%m%d}",
+                "END:VEVENT",
+            ]
+        )
+    lines.append("END:VCALENDAR")
+    return "\r\n".join(lines) + "\r\n"
+
+
 def main() -> None:
     """Fetch and print waste collection dates."""
     uprn = os.getenv("UPRN")
@@ -113,6 +137,11 @@ def main() -> None:
 
     for c in collections:
         print(f"{c.date:%Y-%m-%d} - {c.type}")
+
+    ics = _build_ics(collections)
+    with open("cornwall_collection.ics", "w", encoding="utf-8") as f:
+        f.write(ics)
+    print("iCalendar file written to cornwall_collection.ics")
 
 
 if __name__ == "__main__":
