@@ -54,23 +54,7 @@ class SourceArgumentNotFoundWithSuggestions(Exception):
             f"Unable to find {argument}: {value}. Did you mean one of: {suggestion_text}"
         )
         super().__init__(message)
-
-
-class Source:
-    def __init__(self, uprn: str | None = None, postcode: str | None = None, housenumberorname: str | None = None) -> None:
-        self._uprn = uprn
-        self._postcode = postcode
-        self._housenumberorname = str(housenumberorname) if housenumberorname else None
-
-    def fetch(self) -> list[Collection]:
-        entries: list[Collection] = []
-        session = requests.Session()
-
-        # Find the UPRN based on the postcode and the property name/number
-        if self._uprn is None:
-            args = {"Postcode": self._postcode}
-            r = session.get(SEARCH_URLS["uprn_search"], params=args, timeout=10)
-            r.raise_for_status()
+@@ -66,54 +74,86 @@ class Source:
             soup = BeautifulSoup(r.text, features="html.parser")
             property_uprns = soup.find(id="Uprn").find_all("option")
             if len(property_uprns) == 0:
