@@ -1,10 +1,3 @@
-# Cornwall Waste Collection Calendar Generator
-
-This project fetches upcoming waste collection dates from the Cornwall Council website.
-It uses a scraping mechanism adapted from the `waste_collection_schedule` project.
-
-## Environment Variables
-
 The script reads the following environment variables to determine the property for
 which to fetch collection information:
 
