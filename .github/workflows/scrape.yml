@@ -15,6 +15,10 @@ jobs:
       UPRN: ${{ secrets.UPRN }}
       POSTCODE: ${{ secrets.POSTCODE }}
       HOUSE_NUMBER_OR_NAME: ${{ secrets.HOUSE_NUMBER_OR_NAME }}
+      INCLUDE_FOOD: ${{ secrets.INCLUDE_FOOD }}
+      INCLUDE_RECYCLING: ${{ secrets.INCLUDE_RECYCLING }}
+      INCLUDE_RUBBISH: ${{ secrets.INCLUDE_RUBBISH }}
+      INCLUDE_GARDEN: ${{ secrets.INCLUDE_GARDEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
