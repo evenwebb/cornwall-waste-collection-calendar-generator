@@ -29,6 +29,24 @@ NAME_MAP = {
     "Garden": "Garden Waste Collection",
 }
 
+# Environment variable names to toggle individual collections. By default all
+# events are created unless a value evaluates to ``false``.
+INCLUDE_VARS = {
+    "Food Waste Collection": "INCLUDE_FOOD",
+    "Recycling Collection": "INCLUDE_RECYCLING",
+    "Rubbish Recycling": "INCLUDE_RUBBISH",
+    "Garden Waste Collection": "INCLUDE_GARDEN",
+}
+
+
+def _is_enabled(collection_name: str) -> bool:
+    """Return ``True`` if the given collection should be included."""
+    env_var = INCLUDE_VARS.get(collection_name)
+    value = os.getenv(env_var) if env_var else None
+    if not value:
+        return True
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 
 @dataclass
 class Collection:
@@ -151,6 +169,7 @@ def main() -> None:
         print(f"Error fetching data: {exc}")
         return
 
+    collections = [c for c in collections if _is_enabled(c.type)]
     for c in collections:
         print(f"{c.date:%Y-%m-%d} - {c.type}")
 

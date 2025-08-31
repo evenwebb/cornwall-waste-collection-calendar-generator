@@ -12,7 +12,17 @@ which to fetch collection information:
 - `POSTCODE` – Postcode of the property (used when `UPRN` is not set).
 - `HOUSE_NUMBER_OR_NAME` – House number or name (used with `POSTCODE`).
 
-A sample environment file is provided as `.env.example`.
+Optional variables allow disabling generation of specific collection types. If
+unset, all events are created.
+
+- `INCLUDE_FOOD` – set to `false` to skip Food Waste Collection events.
+- `INCLUDE_RECYCLING` – set to `false` to skip Recycling Collection events.
+- `INCLUDE_RUBBISH` – set to `false` to skip Rubbish Recycling events.
+- `INCLUDE_GARDEN` – set to `false` to skip Garden Waste Collection events.
+
+A sample environment file is provided as `.env.example`. When using the
+included GitHub Actions workflow, add these variables (including any optional
+`INCLUDE_*` values) as repository secrets.
 
 ## Usage
 
