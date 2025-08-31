@@ -43,7 +43,7 @@ def _is_enabled(collection_name: str) -> bool:
     """Return ``True`` if the given collection should be included."""
     env_var = INCLUDE_VARS.get(collection_name)
     value = os.getenv(env_var) if env_var else None
-    if value is None:
+    if not value:
         return True
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
