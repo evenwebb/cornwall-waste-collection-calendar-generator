@@ -21,7 +21,7 @@ ICON_MAP = {
     "Garden": "mdi:flower",
 }
 
-# Map the council's shorthand names to user facing summaries
+# Map the council's shorthand names to user-friendly summaries
 NAME_MAP = {
     "Food": "Food Waste Collection",
     "Recycling": "Recycling Collection",
