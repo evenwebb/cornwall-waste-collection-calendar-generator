@@ -1,3 +1,10 @@
+# Cornwall Waste Collection Calendar Generator
+
+This project fetches upcoming waste collection dates from the Cornwall Council website.
+It uses a scraping mechanism adapted from the `waste_collection_schedule` project and builds an iCalendar (.ics) file. The generated calendar can be imported into any calendar application that supports the iCalendar format.
+
+## Environment Variables
+
 The script reads the following environment variables to determine the property for
 which to fetch collection information:
 
