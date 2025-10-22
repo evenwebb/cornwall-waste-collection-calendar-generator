@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          pip install -r requirements.txt
       - name: Run scraper
         run: python cornwall_collection.py
       - name: Commit updated calendar
