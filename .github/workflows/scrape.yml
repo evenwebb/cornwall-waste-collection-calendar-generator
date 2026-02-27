@@ -15,10 +15,23 @@ jobs:
       UPRN: ${{ secrets.UPRN }}
       POSTCODE: ${{ secrets.POSTCODE }}
       HOUSE_NUMBER_OR_NAME: ${{ secrets.HOUSE_NUMBER_OR_NAME }}
+      STRICT_POSTCODE_MATCH: ${{ secrets.STRICT_POSTCODE_MATCH }}
       INCLUDE_FOOD: ${{ secrets.INCLUDE_FOOD }}
       INCLUDE_RECYCLING: ${{ secrets.INCLUDE_RECYCLING }}
       INCLUDE_RUBBISH: ${{ secrets.INCLUDE_RUBBISH }}
       INCLUDE_GARDEN: ${{ secrets.INCLUDE_GARDEN }}
+      ENABLE_COLLECTIONS: ${{ secrets.ENABLE_COLLECTIONS }}
+      DISABLE_COLLECTIONS: ${{ secrets.DISABLE_COLLECTIONS }}
+      FAIL_ON_EMPTY: ${{ secrets.FAIL_ON_EMPTY }}
+      OUTPUT_FILENAME: ${{ secrets.OUTPUT_FILENAME }}
+      TITLE: ${{ secrets.TITLE }}
+      DESCRIPTION: ${{ secrets.DESCRIPTION }}
+      URL: ${{ secrets.URL }}
+      USER_AGENT: ${{ secrets.USER_AGENT }}
+      LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+      REQUEST_TIMEOUT: ${{ secrets.REQUEST_TIMEOUT }}
+      REQUEST_MAX_RETRIES: ${{ secrets.REQUEST_MAX_RETRIES }}
+      REQUEST_RETRY_BACKOFF: ${{ secrets.REQUEST_RETRY_BACKOFF }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -33,12 +46,13 @@ jobs:
         run: python cornwall_collection.py
       - name: Commit updated calendar
         run: |
+          OUTPUT_FILE="${OUTPUT_FILENAME:-cornwall_collection.ics}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet --exit-code cornwall_collection.ics; then
+          if git diff --quiet --exit-code "$OUTPUT_FILE"; then
             echo "No changes to commit"
           else
-            git add cornwall_collection.ics
+            git add "$OUTPUT_FILE"
             git commit -m "Update waste collection calendar"
             git push
           fi

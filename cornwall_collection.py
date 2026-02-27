@@ -8,49 +8,173 @@ from datetime import date, datetime, timedelta, timezone
 
 import requests
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-# Configuration constants
-TITLE = "Cornwall Council"
-DESCRIPTION = "Source for cornwall.gov.uk services for Cornwall Council"
-URL = "https://cornwall.gov.uk"
-USER_AGENT = "Cornwall-Waste-Calendar-Generator/1.0"
-REQUEST_TIMEOUT = 10
+# Calendar metadata defaults
+DEFAULT_TITLE = "Cornwall Council"
+DEFAULT_DESCRIPTION = "Source for cornwall.gov.uk services for Cornwall Council"
+DEFAULT_URL = "https://cornwall.gov.uk"
+DEFAULT_USER_AGENT = "Cornwall-Waste-Calendar-Generator/1.0"
+DEFAULT_LOG_LEVEL = "INFO"
+
+# Optional environment overrides (fallback to defaults above)
+TITLE = os.getenv("TITLE", DEFAULT_TITLE)
+DESCRIPTION = os.getenv("DESCRIPTION", DEFAULT_DESCRIPTION)
+URL = os.getenv("URL", DEFAULT_URL)
+USER_AGENT = os.getenv("USER_AGENT", DEFAULT_USER_AGENT)
+LOG_LEVEL = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper()
+
+# Runtime defaults
+DEFAULT_REQUEST_TIMEOUT = 10.0
+DEFAULT_MAX_RETRIES = 2
+DEFAULT_RETRY_BACKOFF = 1.0
 OUTPUT_FILENAME = "cornwall_collection.ics"
 
 SEARCH_URLS = {
     "uprn_search": "https://www.cornwall.gov.uk/my-area/",
     "collection_search": "https://www.cornwall.gov.uk/umbraco/Surface/Waste/MyCollectionDays?subscribe=False",
 }
-ICON_MAP = {
-    "Rubbish": "mdi:delete",
-    "Recycling": "mdi:recycle",
-    "Garden": "mdi:flower",
-}
 
-# Map the council's shorthand names to user-friendly summaries
-NAME_MAP = {
-    "Food": "Food Waste Collection",
-    "Recycling": "Recycling Collection",
-    "Rubbish": "Rubbish Recycling",
-    "Garden": "Garden Waste Collection",
+# Collection configuration (single source of truth).
+COLLECTION_CONFIG = {
+    "Food": {
+        "summary": "Food Waste Collection",
+        "icon": "mdi:food-apple",
+        "include_env": "INCLUDE_FOOD",
+    },
+    "Recycling": {
+        "summary": "Recycling Collection",
+        "icon": "mdi:recycle",
+        "include_env": "INCLUDE_RECYCLING",
+    },
+    "Rubbish": {
+        "summary": "Rubbish Collection",
+        "icon": "mdi:delete",
+        "include_env": "INCLUDE_RUBBISH",
+    },
+    "Garden": {
+        "summary": "Garden Waste Collection",
+        "icon": "mdi:flower",
+        "include_env": "INCLUDE_GARDEN",
+    },
 }
-
-# Environment variable names to toggle individual collections. By default all
-# events are created unless a value evaluates to ``false``.
+NAME_MAP = {key: value["summary"] for key, value in COLLECTION_CONFIG.items()}
+ICON_MAP = {key: value["icon"] for key, value in COLLECTION_CONFIG.items()}
 INCLUDE_VARS = {
-    "Food Waste Collection": "INCLUDE_FOOD",
-    "Recycling Collection": "INCLUDE_RECYCLING",
-    "Rubbish Recycling": "INCLUDE_RUBBISH",
-    "Garden Waste Collection": "INCLUDE_GARDEN",
+    value["summary"]: value["include_env"] for value in COLLECTION_CONFIG.values()
+}
+COLLECTION_ALIASES = {
+    token.casefold(): value["summary"]
+    for token, value in COLLECTION_CONFIG.items()
+} | {
+    value["summary"].casefold(): value["summary"]
+    for value in COLLECTION_CONFIG.values()
 }
 
 # Configure logging
+resolved_log_level = getattr(logging, LOG_LEVEL, logging.INFO)
 logging.basicConfig(
-    level=logging.INFO,
+    level=resolved_log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+if not isinstance(getattr(logging, LOG_LEVEL, None), int):
+    logger.warning(
+        "Invalid LOG_LEVEL=%r, defaulting to %s",
+        LOG_LEVEL,
+        logging.getLevelName(resolved_log_level),
+    )
+
+
+def _env_true(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_false(value: str) -> bool:
+    return value.strip().lower() in {"0", "false", "no", "off"}
+
+
+def _get_env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    if _env_true(value):
+        return True
+    if _env_false(value):
+        return False
+    logger.warning("Invalid boolean for %s=%r, using default %s", name, value, default)
+    return default
+
+
+def _get_env_int(name: str, default: int, minimum: int = 0) -> int:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        logger.warning("Invalid integer for %s=%r, using default %d", name, value, default)
+        return default
+    if parsed < minimum:
+        logger.warning(
+            "Value for %s=%d is below minimum %d, using %d",
+            name,
+            parsed,
+            minimum,
+            minimum,
+        )
+        return minimum
+    return parsed
+
+
+def _get_env_float(name: str, default: float, minimum: float = 0.0) -> float:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        logger.warning("Invalid number for %s=%r, using default %.1f", name, value, default)
+        return default
+    if parsed < minimum:
+        logger.warning(
+            "Value for %s=%.2f is below minimum %.2f, using %.2f",
+            name,
+            parsed,
+            minimum,
+            minimum,
+        )
+        return minimum
+    return parsed
+
+
+def _get_env_csv(name: str) -> list[str]:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return []
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _normalize_collection_name(name: str) -> str | None:
+    return COLLECTION_ALIASES.get(name.casefold().strip())
+
+
+def _parse_collection_list(env_name: str) -> set[str]:
+    selections: set[str] = set()
+    for item in _get_env_csv(env_name):
+        normalized = _normalize_collection_name(item)
+        if normalized is None:
+            logger.warning(
+                "Unknown collection in %s=%r. Valid values: %s",
+                env_name,
+                item,
+                ", ".join(sorted(COLLECTION_ALIASES.keys())),
+            )
+            continue
+        selections.add(normalized)
+    return selections
 
 
 def _is_enabled(collection_name: str) -> bool:
@@ -59,7 +183,19 @@ def _is_enabled(collection_name: str) -> bool:
     value = os.getenv(env_var) if env_var else None
     if not value:
         return True
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return _env_true(value)
+
+
+def _is_selected_by_lists(
+    collection_name: str,
+    enabled_collections: set[str],
+    disabled_collections: set[str],
+) -> bool:
+    if enabled_collections and collection_name not in enabled_collections:
+        return False
+    if collection_name in disabled_collections:
+        return False
+    return True
 
 
 @dataclass
@@ -96,6 +232,10 @@ class SourceArgumentNotFoundWithSuggestions(Exception):
         super().__init__(message)
 
 
+class EmptyCollectionsError(Exception):
+    """Raised when no collections are found and strict empty handling is enabled."""
+
+
 class Source:
     """Fetches waste collection data from Cornwall Council website.
 
@@ -113,6 +253,10 @@ class Source:
         uprn: str | None = None,
         postcode: str | None = None,
         housenumberorname: str | None = None,
+        request_timeout: float = DEFAULT_REQUEST_TIMEOUT,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_backoff: float = DEFAULT_RETRY_BACKOFF,
+        strict_postcode_match: bool = True,
     ) -> None:
         """Initialize the Source with property identification parameters.
 
@@ -124,6 +268,10 @@ class Source:
         self._uprn = uprn
         self._postcode = postcode
         self._housenumberorname = str(housenumberorname) if housenumberorname else None
+        self._request_timeout = request_timeout
+        self._max_retries = max_retries
+        self._retry_backoff = retry_backoff
+        self._strict_postcode_match = strict_postcode_match
 
     def _parse_collection_date(self, date_str: str) -> date:
         """Parse a collection date string, handling year boundaries correctly.
@@ -139,25 +287,17 @@ class Source:
             A date object representing the collection date.
         """
         today = date.today()
-        current_month = today.month
         current_year = today.year
 
         # Parse with current year first
         parsed_date = datetime.strptime(f"{date_str} {current_year}", "%d %b %Y").date()
 
-        # If we're in December (month 12) and the parsed date is in January/February (months 1-2),
-        # the date is likely in the next year
-        if current_month == 12 and parsed_date.month <= 2:
+        # The service returns upcoming collections; if this year is already in the past,
+        # roll forward to the same date in the next year.
+        if parsed_date < today:
             parsed_date = datetime.strptime(
                 f"{date_str} {current_year + 1}", "%d %b %Y"
             ).date()
-        # If we're in January (month 1) and the parsed date is in December (month 12),
-        # the date might be from last year (though this is less common for future collections)
-        elif current_month == 1 and parsed_date.month == 12:
-            if parsed_date < today:
-                parsed_date = datetime.strptime(
-                    f"{date_str} {current_year - 1}", "%d %b %Y"
-                ).date()
 
         return parsed_date
 
@@ -178,6 +318,18 @@ class Source:
 
         with requests.Session() as session:
             session.headers.update(headers)
+            retries = Retry(
+                total=self._max_retries,
+                connect=self._max_retries,
+                read=self._max_retries,
+                status=self._max_retries,
+                backoff_factor=self._retry_backoff,
+                status_forcelist=(429, 500, 502, 503, 504),
+                allowed_methods=frozenset({"GET"}),
+            )
+            adapter = HTTPAdapter(max_retries=retries)
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
 
             # Find the UPRN based on the postcode and the property name/number
             if self._uprn is None:
@@ -193,7 +345,9 @@ class Source:
                 )
                 args = {"Postcode": self._postcode}
                 r = session.get(
-                    SEARCH_URLS["uprn_search"], params=args, timeout=REQUEST_TIMEOUT
+                    SEARCH_URLS["uprn_search"],
+                    params=args,
+                    timeout=self._request_timeout,
                 )
                 r.raise_for_status()
                 soup = BeautifulSoup(r.text, features="html.parser")
@@ -202,19 +356,34 @@ class Source:
                     raise SourceArgumentNotFound("postcode", str(self._postcode))
 
                 property_uprns = uprn_element.find_all("option")
-                if len(property_uprns) == 0:
+                valid_uprns = [match for match in property_uprns if match.get("value")]
+                if len(valid_uprns) == 0:
                     raise SourceArgumentNotFound("postcode", str(self._postcode))
 
-                for match in property_uprns:
-                    if match.text.startswith(self._housenumberorname or ""):
-                        self._uprn = match["value"]
-                        break
+                if self._housenumberorname:
+                    house_query = self._housenumberorname.casefold().strip()
+                    for match in valid_uprns:
+                        if match.text.casefold().strip().startswith(house_query):
+                            self._uprn = match["value"]
+                            break
+                elif self._strict_postcode_match:
+                    raise ValueError(
+                        "POSTCODE lookup requires HOUSE_NUMBER_OR_NAME when "
+                        "STRICT_POSTCODE_MATCH is enabled"
+                    )
+                else:
+                    self._uprn = valid_uprns[0]["value"]
+                    logger.warning(
+                        "HOUSE_NUMBER_OR_NAME not provided; defaulting to first "
+                        "postcode match. Set STRICT_POSTCODE_MATCH=true to require "
+                        "an explicit property match."
+                    )
 
                 if self._uprn is None:
                     raise SourceArgumentNotFoundWithSuggestions(
                         "housenumberorname",
                         self._housenumberorname or "",
-                        [match.text for match in property_uprns],
+                        [match.text for match in valid_uprns],
                     )
                 logger.info("Found UPRN: %s", self._uprn)
 
@@ -222,7 +391,9 @@ class Source:
             logger.info("Fetching collection dates for UPRN: %s", self._uprn)
             args = {"uprn": self._uprn}
             r = session.get(
-                SEARCH_URLS["collection_search"], params=args, timeout=REQUEST_TIMEOUT
+                SEARCH_URLS["collection_search"],
+                params=args,
+                timeout=self._request_timeout,
             )
             r.raise_for_status()
             soup = BeautifulSoup(r.text, features="html.parser")
@@ -258,6 +429,16 @@ class Source:
         return entries
 
 
+def _escape_ics_text(value: str) -> str:
+    """Escape text for ICS properties."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace(";", r"\;")
+        .replace(",", r"\,")
+        .replace("\n", r"\n")
+    )
+
+
 def _build_ics(collections: list[Collection]) -> str:
     """Create an iCalendar file for the provided collections."""
     lines = [
@@ -273,13 +454,17 @@ def _build_ics(collections: list[Collection]) -> str:
             [
                 "BEGIN:VEVENT",
                 f"UID:{c.date:%Y%m%d}-{c.type.replace(' ', '')}@{URL}",
-                f"SUMMARY:{c.type}",
+                f"SUMMARY:{_escape_ics_text(c.type)}",
+                f"DESCRIPTION:{_escape_ics_text(DESCRIPTION)}",
+                f"URL:{URL}",
                 f"DTSTAMP:{dtstamp}",
                 f"DTSTART;VALUE=DATE:{c.date:%Y%m%d}",
                 f"DTEND;VALUE=DATE:{(c.date + timedelta(days=1)):%Y%m%d}",
                 "END:VEVENT",
             ]
         )
+        if c.icon:
+            lines.insert(-1, f"X-ICON:{_escape_ics_text(c.icon)}")
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"
 
@@ -312,7 +497,9 @@ def print_collections(collections: list[Collection]) -> None:
         print(f"{c.date:%Y-%m-%d} - {c.type}")
 
 
-def validate_environment() -> tuple[str | None, str | None, str | None]:
+def validate_environment(
+    strict_postcode_match: bool,
+) -> tuple[str | None, str | None, str | None]:
     """Validate and retrieve environment variables.
 
     Returns:
@@ -331,10 +518,15 @@ def validate_environment() -> tuple[str | None, str | None, str | None]:
             "See README.md for configuration details."
         )
 
+    if postcode and strict_postcode_match and not house:
+        raise ValueError(
+            "POSTCODE is set but HOUSE_NUMBER_OR_NAME is missing while "
+            "STRICT_POSTCODE_MATCH is enabled."
+        )
     if postcode and not house:
         logger.warning(
             "POSTCODE is set but HOUSE_NUMBER_OR_NAME is not. "
-            "This may result in matching the first property at the postcode."
+            "Using first postcode match because STRICT_POSTCODE_MATCH is disabled."
         )
 
     return uprn, postcode, house
@@ -353,31 +545,70 @@ def main() -> None:
     Exits with status code 1 on error.
     """
     try:
+        strict_postcode_match = _get_env_bool("STRICT_POSTCODE_MATCH", True)
+        fail_on_empty = _get_env_bool("FAIL_ON_EMPTY", False)
+        output_filename = os.getenv("OUTPUT_FILENAME", OUTPUT_FILENAME)
+        request_timeout = _get_env_float(
+            "REQUEST_TIMEOUT",
+            DEFAULT_REQUEST_TIMEOUT,
+            minimum=0.1,
+        )
+        max_retries = _get_env_int("REQUEST_MAX_RETRIES", DEFAULT_MAX_RETRIES, minimum=0)
+        retry_backoff = _get_env_float(
+            "REQUEST_RETRY_BACKOFF",
+            DEFAULT_RETRY_BACKOFF,
+            minimum=0.0,
+        )
+        enabled_collections = _parse_collection_list("ENABLE_COLLECTIONS")
+        disabled_collections = _parse_collection_list("DISABLE_COLLECTIONS")
+
         # Validate environment and get configuration
-        uprn, postcode, house = validate_environment()
+        uprn, postcode, house = validate_environment(strict_postcode_match)
         logger.info("Starting Cornwall waste collection calendar generator")
 
         # Fetch collection data
-        source = Source(uprn=uprn, postcode=postcode, housenumberorname=house)
+        source = Source(
+            uprn=uprn,
+            postcode=postcode,
+            housenumberorname=house,
+            request_timeout=request_timeout,
+            max_retries=max_retries,
+            retry_backoff=retry_backoff,
+            strict_postcode_match=strict_postcode_match,
+        )
         collections = source.fetch()
 
         if not collections:
-            logger.warning("No collections found")
+            message = "No collections found"
+            if fail_on_empty:
+                raise EmptyCollectionsError(message)
+            logger.warning(message)
             return
 
         # Filter based on user preferences
         original_count = len(collections)
-        collections = [c for c in collections if _is_enabled(c.type)]
+        collections = [
+            c
+            for c in collections
+            if _is_enabled(c.type)
+            and _is_selected_by_lists(c.type, enabled_collections, disabled_collections)
+        ]
         filtered_count = original_count - len(collections)
         if filtered_count > 0:
             logger.info(
-                "Filtered out %d collection(s) based on INCLUDE_* settings",
+                "Filtered out %d collection(s) based on collection filtering settings",
                 filtered_count,
             )
+        if not collections:
+            message = "No collections remain after filtering"
+            if fail_on_empty:
+                raise EmptyCollectionsError(message)
+            logger.warning(message)
+            return
 
         # Display and save results
         print_collections(collections)
-        write_ics_file(collections)
+        write_ics_file(collections, output_filename)
 
         logger.info("Processing complete")
 
@@ -385,6 +616,7 @@ def main() -> None:
         ValueError,
         SourceArgumentNotFound,
         SourceArgumentNotFoundWithSuggestions,
+        EmptyCollectionsError,
     ) as exc:
         logger.error("Configuration or lookup error: %s", exc)
         sys.exit(1)
