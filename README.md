@@ -51,6 +51,7 @@ Output file: `cornwall_collection.ics`
 
 - Scrapes latest collection dates from Cornwall Council.
 - Generates RFC 5545-compatible `.ics` calendar events.
+- Uses deterministic event UIDs to avoid duplicate events across syncs.
 - Supports UPRN lookup or postcode + house matching.
 - Per-collection filtering via `INCLUDE_*` flags.
 - Advanced allow/deny filtering with `ENABLE_COLLECTIONS` and `DISABLE_COLLECTIONS`.
@@ -109,8 +110,6 @@ export ENABLE_COLLECTIONS="Food,Recycling"
 python3 cornwall_collection.py
 ```
 
----
-
 ## Configuration
 
 All settings are optional unless noted otherwise.
@@ -137,6 +136,8 @@ All settings are optional unless noted otherwise.
 | `REQUEST_TIMEOUT` | No | `10` | HTTP timeout seconds. |
 | `REQUEST_MAX_RETRIES` | No | `2` | Retry count for transient HTTP failures. |
 | `REQUEST_RETRY_BACKOFF` | No | `1.0` | Retry backoff factor. |
+| `ENABLE_HTTP_CACHE` | No | `true` | Enable conditional HTTP caching (`ETag` / `Last-Modified`). |
+| `HTTP_CACHE_FILE` | No | `.http_cache.json` | Cache metadata file used for conditional requests. |
 
 `*` You must provide either `UPRN`, or `POSTCODE` (plus `HOUSE_NUMBER_OR_NAME` if strict matching is enabled).
 
@@ -155,9 +156,11 @@ This repo includes `.github/workflows/scrape.yml`:
 - Runs daily at `06:00 UTC`
 - Can be triggered manually (`workflow_dispatch`)
 - Regenerates the `.ics` file
-- Commits and pushes changes when output differs
+- Commits and pushes changes when output/cache files differ
+- Optionally creates or updates a GitHub issue on workflow failure (`CREATE_FAILURE_ISSUE=true`)
 
 Set the same variables from `.env.example` as GitHub repository secrets.
+For failure issue creation, add secret `CREATE_FAILURE_ISSUE=true`.
 
 How it works for calendar subscriptions:
 

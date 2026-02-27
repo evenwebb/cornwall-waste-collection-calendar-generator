@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+from urllib.parse import urlencode
 
 import requests
 from bs4 import BeautifulSoup
@@ -18,18 +22,12 @@ DEFAULT_URL = "https://cornwall.gov.uk"
 DEFAULT_USER_AGENT = "Cornwall-Waste-Calendar-Generator/1.0"
 DEFAULT_LOG_LEVEL = "INFO"
 
-# Optional environment overrides (fallback to defaults above)
-TITLE = os.getenv("TITLE", DEFAULT_TITLE)
-DESCRIPTION = os.getenv("DESCRIPTION", DEFAULT_DESCRIPTION)
-URL = os.getenv("URL", DEFAULT_URL)
-USER_AGENT = os.getenv("USER_AGENT", DEFAULT_USER_AGENT)
-LOG_LEVEL = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper()
-
 # Runtime defaults
 DEFAULT_REQUEST_TIMEOUT = 10.0
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_RETRY_BACKOFF = 1.0
 OUTPUT_FILENAME = "cornwall_collection.ics"
+DEFAULT_HTTP_CACHE_FILE = ".http_cache.json"
 
 SEARCH_URLS = {
     "uprn_search": "https://www.cornwall.gov.uk/my-area/",
@@ -72,20 +70,7 @@ COLLECTION_ALIASES = {
     for value in COLLECTION_CONFIG.values()
 }
 
-# Configure logging
-resolved_log_level = getattr(logging, LOG_LEVEL, logging.INFO)
-logging.basicConfig(
-    level=resolved_log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
 logger = logging.getLogger(__name__)
-if not isinstance(getattr(logging, LOG_LEVEL, None), int):
-    logger.warning(
-        "Invalid LOG_LEVEL=%r, defaulting to %s",
-        LOG_LEVEL,
-        logging.getLevelName(resolved_log_level),
-    )
 
 
 def _env_true(value: str) -> bool:
@@ -161,20 +146,35 @@ def _normalize_collection_name(name: str) -> str | None:
     return COLLECTION_ALIASES.get(name.casefold().strip())
 
 
-def _parse_collection_list(env_name: str) -> set[str]:
+def _parse_collection_tokens(items: list[str], source_name: str) -> set[str]:
     selections: set[str] = set()
-    for item in _get_env_csv(env_name):
+    for item in items:
         normalized = _normalize_collection_name(item)
         if normalized is None:
             logger.warning(
                 "Unknown collection in %s=%r. Valid values: %s",
-                env_name,
+                source_name,
                 item,
                 ", ".join(sorted(COLLECTION_ALIASES.keys())),
             )
             continue
         selections.add(normalized)
     return selections
+
+
+def _configure_logging(log_level: str) -> None:
+    resolved_log_level = getattr(logging, log_level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=resolved_log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+    if not isinstance(getattr(logging, log_level.upper(), None), int):
+        logger.warning(
+            "Invalid LOG_LEVEL=%r, defaulting to %s",
+            log_level,
+            logging.getLevelName(resolved_log_level),
+        )
 
 
 def _is_enabled(collection_name: str) -> bool:
@@ -211,6 +211,64 @@ class Collection:
     date: date
     type: str
     icon: str | None = None
+
+
+class HttpResponseCache:
+    def __init__(self, enabled: bool, filename: str) -> None:
+        self._enabled = enabled
+        self._filename = Path(filename)
+        self._cache: dict[str, dict[str, str]] = {}
+
+    def load(self) -> None:
+        if not self._enabled or not self._filename.exists():
+            return
+        try:
+            self._cache = json.loads(self._filename.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to load HTTP cache file %s: %s", self._filename, exc)
+            self._cache = {}
+
+    def save(self) -> None:
+        if not self._enabled:
+            return
+        try:
+            self._filename.write_text(
+                json.dumps(self._cache, indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            logger.warning("Failed to save HTTP cache file %s: %s", self._filename, exc)
+
+    @staticmethod
+    def _cache_key(url: str, params: dict[str, str] | None) -> str:
+        query = urlencode(sorted((params or {}).items()))
+        return f"{url}?{query}"
+
+    def get(
+        self,
+        url: str,
+        params: dict[str, str] | None = None,
+    ) -> dict[str, str] | None:
+        if not self._enabled:
+            return None
+        return self._cache.get(self._cache_key(url, params))
+
+    def set(
+        self,
+        url: str,
+        params: dict[str, str] | None,
+        *,
+        body: str,
+        etag: str | None,
+        last_modified: str | None,
+    ) -> None:
+        if not self._enabled:
+            return
+        self._cache[self._cache_key(url, params)] = {
+            "body": body,
+            "etag": etag or "",
+            "last_modified": last_modified or "",
+        }
 
 
 class SourceArgumentNotFound(Exception):
@@ -253,10 +311,12 @@ class Source:
         uprn: str | None = None,
         postcode: str | None = None,
         housenumberorname: str | None = None,
+        user_agent: str = DEFAULT_USER_AGENT,
         request_timeout: float = DEFAULT_REQUEST_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         retry_backoff: float = DEFAULT_RETRY_BACKOFF,
         strict_postcode_match: bool = True,
+        http_cache: HttpResponseCache | None = None,
     ) -> None:
         """Initialize the Source with property identification parameters.
 
@@ -268,10 +328,60 @@ class Source:
         self._uprn = uprn
         self._postcode = postcode
         self._housenumberorname = str(housenumberorname) if housenumberorname else None
+        self._user_agent = user_agent
         self._request_timeout = request_timeout
         self._max_retries = max_retries
         self._retry_backoff = retry_backoff
         self._strict_postcode_match = strict_postcode_match
+        self._http_cache = http_cache or HttpResponseCache(False, DEFAULT_HTTP_CACHE_FILE)
+
+    @property
+    def resolved_uprn(self) -> str | None:
+        return self._uprn
+
+    def _session_get(
+        self,
+        session: requests.Session,
+        url: str,
+        params: dict[str, str] | None = None,
+    ) -> requests.Response:
+        cached = self._http_cache.get(url, params)
+        headers: dict[str, str] = {}
+        if cached:
+            etag = cached.get("etag")
+            last_modified = cached.get("last_modified")
+            if etag:
+                headers["If-None-Match"] = etag
+            if last_modified:
+                headers["If-Modified-Since"] = last_modified
+
+        response = session.get(
+            url,
+            params=params,
+            timeout=self._request_timeout,
+            headers=headers or None,
+        )
+
+        if response.status_code == 304:
+            if not cached or not cached.get("body"):
+                raise requests.HTTPError("Received 304 but no cached body is available")
+            cached_response = requests.Response()
+            cached_response.status_code = 200
+            cached_response._content = cached["body"].encode("utf-8")
+            cached_response.encoding = "utf-8"
+            cached_response.url = response.url
+            logger.debug("Using cached response body for %s", url)
+            return cached_response
+
+        response.raise_for_status()
+        self._http_cache.set(
+            url,
+            params,
+            body=response.text,
+            etag=response.headers.get("ETag"),
+            last_modified=response.headers.get("Last-Modified"),
+        )
+        return response
 
     def _parse_collection_date(self, date_str: str) -> date:
         """Parse a collection date string, handling year boundaries correctly.
@@ -314,7 +424,7 @@ class Source:
             requests.HTTPError: If the HTTP request fails.
         """
         entries: list[Collection] = []
-        headers = {"User-Agent": USER_AGENT}
+        headers = {"User-Agent": self._user_agent}
 
         with requests.Session() as session:
             session.headers.update(headers)
@@ -344,12 +454,7 @@ class Source:
                     self._housenumberorname,
                 )
                 args = {"Postcode": self._postcode}
-                r = session.get(
-                    SEARCH_URLS["uprn_search"],
-                    params=args,
-                    timeout=self._request_timeout,
-                )
-                r.raise_for_status()
+                r = self._session_get(session, SEARCH_URLS["uprn_search"], args)
                 soup = BeautifulSoup(r.text, features="html.parser")
                 uprn_element = soup.find(id="Uprn")
                 if uprn_element is None:
@@ -390,12 +495,7 @@ class Source:
             # Get the collection days based on the UPRN
             logger.info("Fetching collection dates for UPRN: %s", self._uprn)
             args = {"uprn": self._uprn}
-            r = session.get(
-                SEARCH_URLS["collection_search"],
-                params=args,
-                timeout=self._request_timeout,
-            )
-            r.raise_for_status()
+            r = self._session_get(session, SEARCH_URLS["collection_search"], args)
             soup = BeautifulSoup(r.text, features="html.parser")
 
             for collection_div in soup.find_all("div", class_="collection"):
@@ -439,12 +539,25 @@ def _escape_ics_text(value: str) -> str:
     )
 
 
-def _build_ics(collections: list[Collection]) -> str:
+def _build_uid(collection: Collection, source_id: str) -> str:
+    raw = f"{source_id}|{collection.date.isoformat()}|{collection.type}"
+    digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return f"{digest}@cornwall-waste.local"
+
+
+def _build_ics(
+    collections: list[Collection],
+    *,
+    title: str,
+    description: str,
+    source_url: str,
+    source_id: str,
+) -> str:
     """Create an iCalendar file for the provided collections."""
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        f"PRODID:-//{TITLE}//Waste Collection//EN",
+        f"PRODID:-//{title}//Waste Collection//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ]
@@ -453,10 +566,10 @@ def _build_ics(collections: list[Collection]) -> str:
         lines.extend(
             [
                 "BEGIN:VEVENT",
-                f"UID:{c.date:%Y%m%d}-{c.type.replace(' ', '')}@{URL}",
+                f"UID:{_build_uid(c, source_id)}",
                 f"SUMMARY:{_escape_ics_text(c.type)}",
-                f"DESCRIPTION:{_escape_ics_text(DESCRIPTION)}",
-                f"URL:{URL}",
+                f"DESCRIPTION:{_escape_ics_text(description)}",
+                f"URL:{_escape_ics_text(source_url)}",
                 f"DTSTAMP:{dtstamp}",
                 f"DTSTART;VALUE=DATE:{c.date:%Y%m%d}",
                 f"DTEND;VALUE=DATE:{(c.date + timedelta(days=1)):%Y%m%d}",
@@ -469,14 +582,28 @@ def _build_ics(collections: list[Collection]) -> str:
     return "\r\n".join(lines) + "\r\n"
 
 
-def write_ics_file(collections: list[Collection], filename: str = OUTPUT_FILENAME) -> None:
+def write_ics_file(
+    collections: list[Collection],
+    *,
+    filename: str = OUTPUT_FILENAME,
+    title: str = DEFAULT_TITLE,
+    description: str = DEFAULT_DESCRIPTION,
+    source_url: str = DEFAULT_URL,
+    source_id: str = "default",
+) -> None:
     """Write collections to an iCalendar file.
 
     Args:
         collections: List of Collection objects to write.
         filename: Output filename (default: from OUTPUT_FILENAME constant).
     """
-    ics = _build_ics(collections)
+    ics = _build_ics(
+        collections,
+        title=title,
+        description=description,
+        source_url=source_url,
+        source_id=source_id,
+    )
     with open(filename, "w", encoding="utf-8") as f:
         f.write(ics)
     logger.info("iCalendar file written to %s", filename)
@@ -559,24 +686,43 @@ def main() -> None:
             DEFAULT_RETRY_BACKOFF,
             minimum=0.0,
         )
-        enabled_collections = _parse_collection_list("ENABLE_COLLECTIONS")
-        disabled_collections = _parse_collection_list("DISABLE_COLLECTIONS")
+        enable_http_cache = _get_env_bool("ENABLE_HTTP_CACHE", True)
+        http_cache_file = os.getenv("HTTP_CACHE_FILE", DEFAULT_HTTP_CACHE_FILE)
+        enabled_collections = _parse_collection_tokens(
+            _get_env_csv("ENABLE_COLLECTIONS"),
+            "ENABLE_COLLECTIONS",
+        )
+        disabled_collections = _parse_collection_tokens(
+            _get_env_csv("DISABLE_COLLECTIONS"),
+            "DISABLE_COLLECTIONS",
+        )
+        title = os.getenv("TITLE", DEFAULT_TITLE)
+        description = os.getenv("DESCRIPTION", DEFAULT_DESCRIPTION)
+        source_url = os.getenv("URL", DEFAULT_URL)
+        user_agent = os.getenv("USER_AGENT", DEFAULT_USER_AGENT)
+        log_level = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper()
+        _configure_logging(log_level)
 
         # Validate environment and get configuration
         uprn, postcode, house = validate_environment(strict_postcode_match)
         logger.info("Starting Cornwall waste collection calendar generator")
+        http_cache = HttpResponseCache(enable_http_cache, http_cache_file)
+        http_cache.load()
 
         # Fetch collection data
         source = Source(
             uprn=uprn,
             postcode=postcode,
             housenumberorname=house,
+            user_agent=user_agent,
             request_timeout=request_timeout,
             max_retries=max_retries,
             retry_backoff=retry_backoff,
             strict_postcode_match=strict_postcode_match,
+            http_cache=http_cache,
         )
         collections = source.fetch()
+        http_cache.save()
 
         if not collections:
             message = "No collections found"
@@ -591,7 +737,11 @@ def main() -> None:
             c
             for c in collections
             if _is_enabled(c.type)
-            and _is_selected_by_lists(c.type, enabled_collections, disabled_collections)
+            and _is_selected_by_lists(
+                c.type,
+                enabled_collections,
+                disabled_collections,
+            )
         ]
         filtered_count = original_count - len(collections)
         if filtered_count > 0:
@@ -608,7 +758,15 @@ def main() -> None:
 
         # Display and save results
         print_collections(collections)
-        write_ics_file(collections, output_filename)
+        source_id = source.resolved_uprn or postcode or uprn or "unknown-property"
+        write_ics_file(
+            collections,
+            filename=output_filename,
+            title=title,
+            description=description,
+            source_url=source_url,
+            source_id=source_id,
+        )
 
         logger.info("Processing complete")
 
