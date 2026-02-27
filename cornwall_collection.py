@@ -563,21 +563,20 @@ def _build_ics(
     ]
     dtstamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for c in collections:
-        lines.extend(
-            [
-                "BEGIN:VEVENT",
-                f"UID:{_build_uid(c, source_id)}",
-                f"SUMMARY:{_escape_ics_text(c.type)}",
-                f"DESCRIPTION:{_escape_ics_text(description)}",
-                f"URL:{_escape_ics_text(source_url)}",
-                f"DTSTAMP:{dtstamp}",
-                f"DTSTART;VALUE=DATE:{c.date:%Y%m%d}",
-                f"DTEND;VALUE=DATE:{(c.date + timedelta(days=1)):%Y%m%d}",
-                "END:VEVENT",
-            ]
-        )
+        event_lines = [
+            "BEGIN:VEVENT",
+            f"UID:{_build_uid(c, source_id)}",
+            f"SUMMARY:{_escape_ics_text(c.type)}",
+            f"DESCRIPTION:{_escape_ics_text(description)}",
+            f"URL:{_escape_ics_text(source_url)}",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART;VALUE=DATE:{c.date:%Y%m%d}",
+            f"DTEND;VALUE=DATE:{(c.date + timedelta(days=1)):%Y%m%d}",
+        ]
         if c.icon:
-            lines.insert(-1, f"X-ICON:{_escape_ics_text(c.icon)}")
+            event_lines.append(f"X-ICON:{_escape_ics_text(c.icon)}")
+        event_lines.append("END:VEVENT")
+        lines.extend(event_lines)
     lines.append("END:VCALENDAR")
     return "\r\n".join(lines) + "\r\n"
 
