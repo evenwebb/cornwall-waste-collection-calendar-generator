@@ -1,36 +1,30 @@
 <div align="center">
 
-# Cornwall Waste Collection Calendar Generator
+# 🗑️ Cornwall Waste Collection Calendar Generator
 
-Automatically fetches upcoming Cornwall Council bin collection dates and publishes a continuously updated iCalendar (`.ics`) feed you can subscribe to from Apple Calendar, Google Calendar, Outlook, and other calendar apps.
-
-[![License](https://img.shields.io/github/license/evenwebb/cornwall-waste-collection-calendar-generator)](https://github.com/evenwebb/cornwall-waste-collection-calendar-generator/blob/main/LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.0.0-informational.svg)](https://github.com/evenwebb/cornwall-waste-collection-calendar-generator)
-[![Scrape Workflow](https://github.com/evenwebb/cornwall-waste-collection-calendar-generator/actions/workflows/scrape.yml/badge.svg)](https://github.com/evenwebb/cornwall-waste-collection-calendar-generator/actions/workflows/scrape.yml)
+Automatically fetches upcoming Cornwall Council waste collection dates and generates an iCalendar (`.ics`) feed you can subscribe to in Apple Calendar, Google Calendar, Outlook, and other calendar apps.
 
 </div>
 
 ---
 
-## Table of Contents
+## 📚 Table of Contents
 
-- [Quick Start](#quick-start)
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [GitHub Actions Automation](#github-actions-automation)
-- [Subscribe in Calendar Apps](#subscribe-in-calendar-apps)
-- [Dependencies](#dependencies)
-- [Troubleshooting](#troubleshooting)
-- [Known Limitations](#known-limitations)
-- [License](#license)
-- [Support](#support)
+- [⚡ Quick Start](#-quick-start)
+- [✨ Features](#-features)
+- [📦 Installation](#-installation)
+- [🚀 Usage](#-usage)
+- [⚙️ Configuration](#️-configuration)
+- [🤖 GitHub Actions Automation](#-github-actions-automation)
+- [📲 Subscribe in Calendar Apps](#-subscribe-in-calendar-apps)
+- [🧩 Dependencies](#-dependencies)
+- [🛠️ Troubleshooting](#️-troubleshooting)
+- [⚠️ Known Limitations](#️-known-limitations)
+- [📄 License](#-license)
 
 ---
 
-## Quick Start
+## ⚡ Quick Start
 
 ```bash
 git clone https://github.com/evenwebb/cornwall-waste-collection-calendar-generator.git
@@ -43,26 +37,24 @@ cp .env.example .env
 python3 cornwall_collection.py
 ```
 
-Output file: `cornwall_collection.ics`
+✅ Output file: `cornwall_collection.ics`
 
 ---
 
-## Features
+## ✨ Features
 
-- Scrapes latest collection dates from Cornwall Council.
-- Generates RFC 5545-compatible `.ics` calendar events.
-- Uses deterministic event UIDs to avoid duplicate events across syncs.
-- Supports UPRN lookup or postcode + house matching.
-- Per-collection filtering via `INCLUDE_*` flags.
-- Advanced allow/deny filtering with `ENABLE_COLLECTIONS` and `DISABLE_COLLECTIONS`.
-- Configurable network behavior (timeouts and retries).
-- Optional daily GitHub Actions run that commits calendar updates.
+| Feature | Description |
+|---|---|
+| `🗑️ Flexible Collection Support` | Scrapes Food, Recycling, Rubbish, and Garden dates from Cornwall Council services. |
+| `🧭 Multiple Lookup Paths` | Supports `UPRN` lookup or `POSTCODE` + `HOUSE_NUMBER_OR_NAME`. |
+| `🧹 Smart Filtering` | Includes `INCLUDE_*` toggles plus `ENABLE_COLLECTIONS`/`DISABLE_COLLECTIONS` precedence. |
+| `📅 iCalendar Output` | Generates RFC 5545-compatible `.ics` events with stable deterministic UIDs. |
+| `🌐 HTTP Reliability` | Configurable timeout, retries, and optional conditional HTTP cache (`ETag`/`Last-Modified`). |
+| `🤖 GitHub Actions Ready` | Scheduled automation updates calendar output and can open failure issues automatically. |
 
 ---
 
-## Installation
-
-### Option 1: Run from source (recommended)
+## 📦 Installation
 
 ```bash
 git clone https://github.com/evenwebb/cornwall-waste-collection-calendar-generator.git
@@ -72,30 +64,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Option 2: Install as a package
-
-```bash
-pip install .
-```
-
-Then run:
-
-```bash
-cornwall-collection
-```
-
 ---
 
-## Usage
+## 🚀 Usage
 
-### Example: UPRN lookup
+### 🏠 UPRN lookup
 
 ```bash
 export UPRN="100040118005"
 python3 cornwall_collection.py
 ```
 
-### Example: Postcode + house lookup
+### 📮 Postcode + house lookup
 
 ```bash
 export POSTCODE="TR1 1AA"
@@ -103,16 +83,18 @@ export HOUSE_NUMBER_OR_NAME="10"
 python3 cornwall_collection.py
 ```
 
-### Example: Only generate Food + Recycling events
+### 🎯 Only include selected collections
 
 ```bash
 export ENABLE_COLLECTIONS="Food,Recycling"
 python3 cornwall_collection.py
 ```
 
-## Configuration
+---
 
-All settings are optional unless noted otherwise.
+## ⚙️ Configuration
+
+All settings are optional unless stated otherwise.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
@@ -124,111 +106,82 @@ All settings are optional unless noted otherwise.
 | `INCLUDE_RECYCLING` | No | enabled | Set `false` to exclude recycling events. |
 | `INCLUDE_RUBBISH` | No | enabled | Set `false` to exclude rubbish events. |
 | `INCLUDE_GARDEN` | No | enabled | Set `false` to exclude garden events. |
-| `ENABLE_COLLECTIONS` | No | - | Comma-separated allow-list (e.g. `Food,Recycling`). |
-| `DISABLE_COLLECTIONS` | No | - | Comma-separated deny-list (wins over allow-list). |
-| `FAIL_ON_EMPTY` | No | `false` | Exit with error if no events remain after fetch/filtering. |
+| `ENABLE_COLLECTIONS` | No | - | Comma-separated allow list (e.g. `Food,Recycling`). |
+| `DISABLE_COLLECTIONS` | No | - | Comma-separated deny list (overrides allow list). |
+| `FAIL_ON_EMPTY` | No | `false` | Exit with error if no events remain after filtering. |
 | `OUTPUT_FILENAME` | No | `cornwall_collection.ics` | Output file path/name. |
-| `TITLE` | No | `Cornwall Council` | Calendar product title metadata. |
-| `DESCRIPTION` | No | `Source for cornwall.gov.uk services for Cornwall Council` | Event description text. |
-| `URL` | No | `https://cornwall.gov.uk` | Event source URL metadata. |
+| `TITLE` | No | `Cornwall Council` | Calendar title metadata. |
+| `DESCRIPTION` | No | `Source for cornwall.gov.uk services for Cornwall Council` | Event description metadata. |
+| `URL` | No | `https://cornwall.gov.uk` | Source URL metadata. |
 | `USER_AGENT` | No | `Cornwall-Waste-Calendar-Generator/1.0` | HTTP User-Agent header. |
 | `LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `REQUEST_TIMEOUT` | No | `10` | HTTP timeout seconds. |
+| `REQUEST_TIMEOUT` | No | `10` | HTTP timeout in seconds. |
 | `REQUEST_MAX_RETRIES` | No | `2` | Retry count for transient HTTP failures. |
 | `REQUEST_RETRY_BACKOFF` | No | `1.0` | Retry backoff factor. |
 | `ENABLE_HTTP_CACHE` | No | `true` | Enable conditional HTTP caching (`ETag` / `Last-Modified`). |
-| `HTTP_CACHE_FILE` | No | `.http_cache.json` | Cache metadata file used for conditional requests. |
+| `HTTP_CACHE_FILE` | No | `.http_cache.json` | Cache metadata file path. |
 
-`*` You must provide either `UPRN`, or `POSTCODE` (plus `HOUSE_NUMBER_OR_NAME` if strict matching is enabled).
+`*` Provide either `UPRN`, or `POSTCODE` (plus `HOUSE_NUMBER_OR_NAME` if strict matching is enabled).
 
-Filter precedence:
+### 🔢 Filter precedence
 
 1. `INCLUDE_*` flags
-2. `ENABLE_COLLECTIONS` allow-list (if set)
-3. `DISABLE_COLLECTIONS` deny-list (always final)
+2. `ENABLE_COLLECTIONS` allow list (if set)
+3. `DISABLE_COLLECTIONS` deny list (always final)
 
 ---
 
-## GitHub Actions Automation
+## 🤖 GitHub Actions Automation
 
 This repo includes `.github/workflows/scrape.yml`:
 
-- Runs daily at `06:00 UTC`
-- Can be triggered manually (`workflow_dispatch`)
-- Regenerates the `.ics` file
-- Commits and pushes changes when output/cache files differ
-- Optionally creates or updates a GitHub issue on workflow failure (`CREATE_FAILURE_ISSUE=true`)
+- `⏰` Runs daily at `06:00 UTC`
+- `🖱️` Supports manual runs (`workflow_dispatch`)
+- `🔁` Retries scraper runs before failing (`SCRAPER_RUN_ATTEMPTS`, default `2`)
+- `📝` Commits updated output/cache files only when changed
+- `🚨` Optionally opens or updates a GitHub issue on failure (`CREATE_FAILURE_ISSUE=true`)
 
-Set the same variables from `.env.example` as GitHub repository secrets.
-For failure issue creation, add secret `CREATE_FAILURE_ISSUE=true`.
+Set repository secrets for runtime config (same variables as `.env.example`).
 
-How it works for calendar subscriptions:
+Recommended workflow-specific secrets:
 
-1. GitHub Action updates `cornwall_collection.ics` (or your `OUTPUT_FILENAME`).
-2. The file is committed to your repository.
-3. Your calendar app fetches that same URL on its own refresh schedule.
-4. New collection dates appear automatically without manual re-import.
+- `SCRAPER_RUN_ATTEMPTS` (integer)
+- `CREATE_FAILURE_ISSUE` (`true`/`false`)
 
-If your output file is public in the repo, use the raw GitHub URL pattern:
+---
 
-`https://raw.githubusercontent.com/<github-user>/<repo>/<branch>/<output-file>.ics`
+## 📲 Subscribe in Calendar Apps
+
+Use your raw GitHub `.ics` URL as a subscription URL:
+
+`https://raw.githubusercontent.com/<github-user>/cornwall-waste-collection-calendar-generator/<branch>/<output-file>.ics`
 
 Example:
 
 `https://raw.githubusercontent.com/evenwebb/cornwall-waste-collection-calendar-generator/main/cornwall_collection.ics`
 
----
+### 🗓️ Google Calendar
 
-## Subscribe in Calendar Apps
+1. Open Google Calendar on web.
+2. Click **+** next to **Other calendars**.
+3. Select **From URL**.
+4. Paste the raw `.ics` URL.
 
-Use your raw GitHub `.ics` URL as a **calendar subscription URL** (not a one-time file import).
-
-> Note: For most apps, private GitHub repos will not work as a subscription feed without extra auth setup. Public repo is simplest.
-
-### Google Calendar (Web)
-
-1. Open Google Calendar in a browser.
-2. In the left panel, next to **Other calendars**, click **+**.
-3. Choose **From URL**.
-4. Paste your raw GitHub `.ics` URL.
-5. Click **Add calendar**.
-
-### iPhone / iPad (Apple Calendar)
+### 🍎 iPhone / iPad
 
 1. Open **Settings**.
 2. Go to **Calendar** -> **Accounts** -> **Add Account** -> **Other**.
 3. Tap **Add Subscribed Calendar**.
-4. Paste your raw GitHub `.ics` URL.
-5. Save.
+4. Paste the raw `.ics` URL.
 
-### Android
+### 🤖 Android
 
-Most Android calendar apps sync subscribed calendars via your Google account.
-
-1. Add the calendar in Google Calendar (web) using **From URL**.
-2. On Android, open your calendar app and ensure that subscribed calendar is enabled in sync/display settings.
-
-If your Android app supports direct ICS subscriptions, you can paste the same raw GitHub URL directly in that app.
-
-### Other Calendar Apps (Outlook, desktop apps, etc.)
-
-Look for options named:
-
-- `Subscribe from web`
-- `Add calendar by URL`
-- `Internet calendar`
-
-Then paste the same raw GitHub `.ics` URL.
-
-### Refresh Expectations
-
-- Subscription refresh timing is controlled by each calendar provider/app.
-- Changes pushed by GitHub Actions are not always instant in client apps.
-- If updates seem delayed, wait for the next provider refresh cycle or re-open/sync the calendar app.
+1. Add the subscription in Google Calendar web using **From URL**.
+2. Ensure that calendar is enabled in your Android calendar app sync settings.
 
 ---
 
-## Dependencies
+## 🧩 Dependencies
 
 | Package | Purpose |
 |---|---|
@@ -237,54 +190,22 @@ Then paste the same raw GitHub `.ics` URL.
 
 ---
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
-<details>
-<summary><strong>No collections found</strong></summary>
-
-- Verify `UPRN` or `POSTCODE` values are correct.
-- If using postcode mode, confirm `HOUSE_NUMBER_OR_NAME` matches council address formatting.
-- Set `LOG_LEVEL=DEBUG` for more verbose output.
-- Use `FAIL_ON_EMPTY=true` in CI to fail fast when results are empty.
-
-</details>
-
-<details>
-<summary><strong>Postcode lookup fails with strict match enabled</strong></summary>
-
-- Provide `HOUSE_NUMBER_OR_NAME`.
-- Or set `STRICT_POSTCODE_MATCH=false` to allow fallback to first match (not recommended for shared postcodes).
-
-</details>
-
-<details>
-<summary><strong>Network or transient request errors</strong></summary>
-
-- Increase `REQUEST_TIMEOUT`.
-- Increase `REQUEST_MAX_RETRIES` and/or `REQUEST_RETRY_BACKOFF`.
-
-</details>
+- `🔍` If no collections are found, verify `UPRN` or postcode/address values.
+- `🏡` If using postcode mode, confirm `HOUSE_NUMBER_OR_NAME` matches council formatting.
+- `📣` Set `LOG_LEVEL=DEBUG` for more verbose diagnostics.
+- `🚫` Use `FAIL_ON_EMPTY=true` in CI to fail fast on empty calendars.
 
 ---
 
-## Known Limitations
+## ⚠️ Known Limitations
 
-- Parsing depends on Cornwall Council page structure; upstream HTML changes may break scraping.
-- There is currently no automated test suite in this repository.
-
----
-
-## License
-
-Licensed under GPL-3.0-or-later. See [LICENSE](LICENSE).
+- `🧱` Parsing depends on Cornwall Council page/API response structure.
+- `🕒` Calendar subscription refresh timing is controlled by each calendar provider/app.
 
 ---
 
-## Support
+## 📄 License
 
-- Open an issue: <https://github.com/evenwebb/cornwall-waste-collection-calendar-generator/issues>
-- Repository: <https://github.com/evenwebb/cornwall-waste-collection-calendar-generator>
-
-Built and maintained by [evenwebb](https://github.com/evenwebb).
-
-If this project helps you, consider starring the repository.
+[GPL-3.0](LICENSE)

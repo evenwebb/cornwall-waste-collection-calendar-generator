@@ -41,6 +41,7 @@ jobs:
       REQUEST_RETRY_BACKOFF: ${{ secrets.REQUEST_RETRY_BACKOFF }}
       ENABLE_HTTP_CACHE: ${{ secrets.ENABLE_HTTP_CACHE }}
       HTTP_CACHE_FILE: ${{ secrets.HTTP_CACHE_FILE }}
+      SCRAPER_RUN_ATTEMPTS: ${{ secrets.SCRAPER_RUN_ATTEMPTS }}
       CREATE_FAILURE_ISSUE: ${{ secrets.CREATE_FAILURE_ISSUE }}
     steps:
       - uses: actions/checkout@v4
@@ -55,8 +56,31 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-      - name: Run scraper
-        run: python cornwall_collection.py
+      - name: Run scraper (with retries)
+        run: |
+          ATTEMPTS="${SCRAPER_RUN_ATTEMPTS:-2}"
+          if [ "$ATTEMPTS" -lt 1 ]; then
+            ATTEMPTS=1
+          fi
+
+          attempt=1
+          while [ "$attempt" -le "$ATTEMPTS" ]; do
+            echo "Scraper attempt $attempt/$ATTEMPTS"
+            if python cornwall_collection.py; then
+              echo "Scraper completed successfully"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt "$ATTEMPTS" ]; then
+              sleep_seconds=$((attempt * 20))
+              echo "Attempt $attempt failed; retrying in ${sleep_seconds}s..."
+              sleep "$sleep_seconds"
+            fi
+            attempt=$((attempt + 1))
+          done
+
+          echo "All scraper attempts failed"
+          exit 1
       - name: Commit updated calendar
         run: |
           OUTPUT_FILE="${OUTPUT_FILENAME:-cornwall_collection.ics}"
