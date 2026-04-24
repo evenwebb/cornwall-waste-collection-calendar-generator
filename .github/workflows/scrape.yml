@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
       UPRN: ${{ secrets.UPRN }}
       POSTCODE: ${{ secrets.POSTCODE }}
@@ -42,7 +43,7 @@ jobs:
       ENABLE_HTTP_CACHE: ${{ secrets.ENABLE_HTTP_CACHE }}
       HTTP_CACHE_FILE: ${{ secrets.HTTP_CACHE_FILE }}
       SCRAPER_RUN_ATTEMPTS: ${{ secrets.SCRAPER_RUN_ATTEMPTS }}
-      CREATE_FAILURE_ISSUE: ${{ secrets.CREATE_FAILURE_ISSUE }}
+      CREATE_FAILURE_ISSUE: ${{ secrets.CREATE_FAILURE_ISSUE || 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:

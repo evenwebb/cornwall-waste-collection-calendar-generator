@@ -628,7 +628,11 @@ def write_ics_file(
         source_url=source_url,
         source_id=source_id,
     )
-    with open(filename, "w", encoding="utf-8") as f:
+    output_path = Path(filename)
+    if output_path.exists() and output_path.is_dir():
+        raise IsADirectoryError(f"Output filename points to a directory: {filename}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as f:
         f.write(ics)
     logger.info("iCalendar file written to %s", filename)
 
