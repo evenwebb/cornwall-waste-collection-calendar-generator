@@ -142,6 +142,22 @@ def _get_env_csv(name: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
+def _get_env_str(name: str, default: str) -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    return value if value else default
+
+
+def _get_env_optional_str(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
 def _normalize_collection_name(name: str) -> str | None:
     return COLLECTION_ALIASES.get(name.casefold().strip())
 
@@ -458,6 +474,15 @@ class Source:
                 soup = BeautifulSoup(r.text, features="html.parser")
                 uprn_element = soup.find(id="Uprn")
                 if uprn_element is None:
+                    # Cornwall Council's markup has been observed to use a dynamic id
+                    # (e.g. "Uprn-<guid>") while keeping the select name stable.
+                    uprn_element = soup.find("select", attrs={"name": "Uprn"})
+                if uprn_element is None:
+                    uprn_element = soup.find(
+                        "select",
+                        id=lambda value: isinstance(value, str) and value.startswith("Uprn"),
+                    )
+                if uprn_element is None:
                     raise SourceArgumentNotFound("postcode", str(self._postcode))
 
                 property_uprns = uprn_element.find_all("option")
@@ -634,9 +659,9 @@ def validate_environment(
     Raises:
         ValueError: If required environment variables are missing.
     """
-    uprn = os.getenv("UPRN")
-    postcode = os.getenv("POSTCODE")
-    house = os.getenv("HOUSE_NUMBER_OR_NAME")
+    uprn = _get_env_optional_str("UPRN")
+    postcode = _get_env_optional_str("POSTCODE")
+    house = _get_env_optional_str("HOUSE_NUMBER_OR_NAME")
 
     if not uprn and not postcode:
         raise ValueError(
@@ -673,7 +698,7 @@ def main() -> None:
     try:
         strict_postcode_match = _get_env_bool("STRICT_POSTCODE_MATCH", True)
         fail_on_empty = _get_env_bool("FAIL_ON_EMPTY", False)
-        output_filename = os.getenv("OUTPUT_FILENAME", OUTPUT_FILENAME)
+        output_filename = _get_env_str("OUTPUT_FILENAME", OUTPUT_FILENAME)
         request_timeout = _get_env_float(
             "REQUEST_TIMEOUT",
             DEFAULT_REQUEST_TIMEOUT,
@@ -686,7 +711,7 @@ def main() -> None:
             minimum=0.0,
         )
         enable_http_cache = _get_env_bool("ENABLE_HTTP_CACHE", True)
-        http_cache_file = os.getenv("HTTP_CACHE_FILE", DEFAULT_HTTP_CACHE_FILE)
+        http_cache_file = _get_env_str("HTTP_CACHE_FILE", DEFAULT_HTTP_CACHE_FILE)
         enabled_collections = _parse_collection_tokens(
             _get_env_csv("ENABLE_COLLECTIONS"),
             "ENABLE_COLLECTIONS",
@@ -695,11 +720,11 @@ def main() -> None:
             _get_env_csv("DISABLE_COLLECTIONS"),
             "DISABLE_COLLECTIONS",
         )
-        title = os.getenv("TITLE", DEFAULT_TITLE)
-        description = os.getenv("DESCRIPTION", DEFAULT_DESCRIPTION)
-        source_url = os.getenv("URL", DEFAULT_URL)
-        user_agent = os.getenv("USER_AGENT", DEFAULT_USER_AGENT)
-        log_level = os.getenv("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper()
+        title = _get_env_str("TITLE", DEFAULT_TITLE)
+        description = _get_env_str("DESCRIPTION", DEFAULT_DESCRIPTION)
+        source_url = _get_env_str("URL", DEFAULT_URL)
+        user_agent = _get_env_str("USER_AGENT", DEFAULT_USER_AGENT)
+        log_level = _get_env_str("LOG_LEVEL", DEFAULT_LOG_LEVEL).upper()
         _configure_logging(log_level)
 
         # Validate environment and get configuration
