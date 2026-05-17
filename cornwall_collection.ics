@@ -8,7 +8,7 @@ UID:3f4c955d6f1ede86aee1bcc9aeeb818f8254e927@cornwall-waste.local
 SUMMARY:Food Waste Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260516T075949Z
+DTSTAMP:20260517T081718Z
 DTSTART;VALUE=DATE:20260522
 DTEND;VALUE=DATE:20260523
 X-ICON:mdi:food-apple
@@ -18,7 +18,7 @@ UID:f0e3e59376f7ea7cab2530058c3f66203d5cc9d0@cornwall-waste.local
 SUMMARY:Recycling Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260516T075949Z
+DTSTAMP:20260517T081718Z
 DTSTART;VALUE=DATE:20260529
 DTEND;VALUE=DATE:20260530
 X-ICON:mdi:recycle
@@ -28,7 +28,7 @@ UID:d2d84431358ab580db029118f8a874d607efb104@cornwall-waste.local
 SUMMARY:Rubbish Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260516T075949Z
+DTSTAMP:20260517T081718Z
 DTSTART;VALUE=DATE:20260522
 DTEND;VALUE=DATE:20260523
 X-ICON:mdi:delete
