@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -415,6 +416,8 @@ class Source:
         today = date.today()
         current_year = today.year
 
+        # Strip ordinal suffixes before parsing (e.g. "1st Jan" -> "1 Jan")
+        date_str = re.sub(r"(\d+)(st|nd|rd|th)\b", r"\1", date_str)
         # Parse with current year first
         parsed_date = datetime.strptime(f"{date_str} {current_year}", "%d %b %Y").date()
 
@@ -585,6 +588,8 @@ def _build_ics(
         f"PRODID:-//{title}//Waste Collection//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
+        "REFRESH-INTERVAL;VALUE=DURATION:PT12H",
+        "X-PUBLISHED-TTL:PT12H",
     ]
     dtstamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     for c in collections:
@@ -600,6 +605,7 @@ def _build_ics(
         ]
         if c.icon:
             event_lines.append(f"X-ICON:{_escape_ics_text(c.icon)}")
+        event_lines.append("SEQUENCE:0")
         event_lines.append("END:VEVENT")
         lines.extend(event_lines)
     lines.append("END:VCALENDAR")
