@@ -4,23 +4,23 @@ PRODID:-//Cornwall Council//Waste Collection//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
-UID:5bbb0bd74f5c0b56f52b4fdb674afceddff7a8d6@cornwall-waste.local
+UID:7f47a2b8a2df9b3fa5991100b60b32e3714dfb1e@cornwall-waste.local
 SUMMARY:Food Waste Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260612T100556Z
-DTSTART;VALUE=DATE:20260612
-DTEND;VALUE=DATE:20260613
+DTSTAMP:20260613T085334Z
+DTSTART;VALUE=DATE:20260619
+DTEND;VALUE=DATE:20260620
 X-ICON:mdi:food-apple
 END:VEVENT
 BEGIN:VEVENT
-UID:619050d27d04bc495586b64cf6cd66d3c8e685bc@cornwall-waste.local
+UID:d5f145bdbf0abc8341a4d2deefa9b5f7eff98a60@cornwall-waste.local
 SUMMARY:Recycling Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260612T100556Z
-DTSTART;VALUE=DATE:20260612
-DTEND;VALUE=DATE:20260613
+DTSTAMP:20260613T085334Z
+DTSTART;VALUE=DATE:20260626
+DTEND;VALUE=DATE:20260627
 X-ICON:mdi:recycle
 END:VEVENT
 BEGIN:VEVENT
@@ -28,7 +28,7 @@ UID:938875d67af382e956fab543399c094ae0d6d97f@cornwall-waste.local
 SUMMARY:Rubbish Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260612T100556Z
+DTSTAMP:20260613T085334Z
 DTSTART;VALUE=DATE:20260619
 DTEND;VALUE=DATE:20260620
 X-ICON:mdi:delete
