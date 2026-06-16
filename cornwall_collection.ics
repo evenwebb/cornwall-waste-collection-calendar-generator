@@ -10,7 +10,7 @@ UID:7f47a2b8a2df9b3fa5991100b60b32e3714dfb1e@cornwall-waste.local
 SUMMARY:Food Waste Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260615T115737Z
+DTSTAMP:20260616T110522Z
 DTSTART;VALUE=DATE:20260619
 DTEND;VALUE=DATE:20260620
 X-ICON:mdi:food-apple
@@ -21,7 +21,7 @@ UID:d5f145bdbf0abc8341a4d2deefa9b5f7eff98a60@cornwall-waste.local
 SUMMARY:Recycling Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260615T115737Z
+DTSTAMP:20260616T110522Z
 DTSTART;VALUE=DATE:20260626
 DTEND;VALUE=DATE:20260627
 X-ICON:mdi:recycle
@@ -32,10 +32,21 @@ UID:938875d67af382e956fab543399c094ae0d6d97f@cornwall-waste.local
 SUMMARY:Rubbish Collection
 DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
 URL:https://cornwall.gov.uk
-DTSTAMP:20260615T115737Z
+DTSTAMP:20260616T110522Z
 DTSTART;VALUE=DATE:20260619
 DTEND;VALUE=DATE:20260620
 X-ICON:mdi:delete
+SEQUENCE:0
+END:VEVENT
+BEGIN:VEVENT
+UID:2299fd44cc414743a0748257718b363c56b8384c@cornwall-waste.local
+SUMMARY:Garden Waste Collection
+DESCRIPTION:Source for cornwall.gov.uk services for Cornwall Council
+URL:https://cornwall.gov.uk
+DTSTAMP:20260616T110522Z
+DTSTART;VALUE=DATE:20260626
+DTEND;VALUE=DATE:20260627
+X-ICON:mdi:flower
 SEQUENCE:0
 END:VEVENT
 END:VCALENDAR
