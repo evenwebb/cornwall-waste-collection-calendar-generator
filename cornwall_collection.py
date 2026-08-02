@@ -418,6 +418,8 @@ class Source:
 
         # Strip ordinal suffixes before parsing (e.g. "1st Jan" -> "1 Jan")
         date_str = re.sub(r"(\d+)(st|nd|rd|th)\b", r"\1", date_str)
+        # Strip any existing year the site might add (e.g. "7 Aug 2026" -> "7 Aug")
+        date_str = re.sub(r"\s+\d{4}$", "", date_str)
         # Parse with current year first
         parsed_date = datetime.strptime(f"{date_str} {current_year}", "%d %b %Y").date()
 
@@ -496,7 +498,9 @@ class Source:
                 if self._housenumberorname:
                     house_query = self._housenumberorname.casefold().strip()
                     for match in valid_uprns:
-                        if match.text.casefold().strip().startswith(house_query):
+                        # Match first token (house number) to avoid "1" matching "10", "100" etc.
+                        first_token = match.text.casefold().strip().split()[0]
+                        if first_token == house_query:
                             self._uprn = match["value"]
                             break
                 elif self._strict_postcode_match:
