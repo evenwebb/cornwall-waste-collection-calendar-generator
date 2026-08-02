@@ -53,3 +53,7 @@ htmlcov/
 
 # Ruff
 .ruff_cache/
+
+# Generated audit/planning files
+AUDIT-REPORT.md
+FEATURE-SUGGESTIONS.md
